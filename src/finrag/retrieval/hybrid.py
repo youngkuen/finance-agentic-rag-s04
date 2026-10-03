@@ -67,11 +67,11 @@ def rrf(rankings: list[list[str]], k: int = RRF_K) -> dict[str, float]:
 
     rankings 의 각 원소는 chunk_id 를 순위 순서로 늘어놓은 목록이다(첫 번째가 1등).
     """
-    # ── TODO: 여기를 채우세요 ──────────────────────────────
-    # 목록마다 순위 r(1부터)인 문서에 1 / (k + r) 을 더한다. 여러 목록에 나오면 그만큼 더해진다.
-    # 점수는 쓰지 않는다. 순위만 쓴다. 왜 점수를 정규화해 더하지 않는지는 이 파일 맨 위에 있다.
-    # k=60 은 관례값이다. 순위 1과 2의 차이를 얼마나 크게 볼지를 정한다(k 가 작을수록 1등이 압도한다).
-    raise NotImplementedError("TODO: rrf 를 구현하세요")
+    fused: dict[str, float] = {}
+    for ranking in rankings:
+        for r, chunk_id in enumerate(ranking, start=1):
+            fused[chunk_id] = fused.get(chunk_id, 0.0) + 1.0 / (k + r)
+    return fused
 
 
 def _hydrate(chunk_id: str, score: float) -> dict:
@@ -98,9 +98,16 @@ def search(query: str, k: int = 10, *, candidates: int = 50,
     use_bm25=False 면 Dense 순위만으로 같은 모양을 돌려준다(비교 실험용).
     """
     dense_hits = dense.search(query, k=candidates, flt=flt, collection=collection)
-    # ── TODO: 여기를 채우세요 ──────────────────────────────
-    # Dense 후보(dense_hits 의 chunk_id 순서)와 BM25 후보(_bm25().search(query, k=candidates, tokenizer=tokenize)
-    # 가 돌려주는 (chunk_id, 점수) 목록)의 순위를 rrf 로 합쳐, 점수 내림차순 상위 k 개를 _hydrate(chunk_id, 점수) 로 돌려준다.
-    # 생각할 것 하나: flt 가 있을 때 BM25 결과를 그대로 써도 되는가. BM25 인덱스는 Qdrant 밖에 있어 필터를 모른다.
-    #   dense_hits 의 원소에는 "doc_id" 가 있고, _by_id()[chunk_id]["doc_id"] 로 BM25 청크의 문서를 알 수 있다.
-    raise NotImplementedError("TODO: search 의 합치기를 구현하세요")
+    dense_ids = [h["chunk_id"] for h in dense_hits]
+    rankings = [dense_ids]
+    if use_bm25:
+        bm25_ids = [cid for cid, _ in _bm25().search(query, k=candidates, tokenizer=tokenize)]
+        if flt is not None:
+            # BM25 인덱스는 Qdrant 밖에 있어 필터를 모른다. Dense 가 필터를 통과시킨 문서(doc_id) 안에서만 받는다.
+            allowed_docs = {h["doc_id"] for h in dense_hits}
+            by_id = _by_id()
+            bm25_ids = [cid for cid in bm25_ids if by_id.get(cid, {}).get("doc_id") in allowed_docs]
+        rankings.append(bm25_ids)
+    fused = rrf(rankings)
+    top = sorted(fused.items(), key=lambda kv: -kv[1])[:k]
+    return [_hydrate(cid, score) for cid, score in top]

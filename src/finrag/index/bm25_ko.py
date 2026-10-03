@@ -57,12 +57,40 @@ def tokenize(text: str, *, expand: bool = False) -> list[str]:
     expand=True 는 질의에만 쓴다. 별칭 사전(ALIASES)의 낱말을 더해 "자기부담금"으로 물어도
     "공제금액"이라고 적힌 조항이 걸리게 한다. 문서 쪽은 확장하지 않는다.
     """
-    # ── TODO: 여기를 채우세요 ──────────────────────────────
-    # 요구사항은 tests/test_hybrid.py 의 tokenize 테스트 6개가 정한다. 재료는 이 파일 위에 다 있다.
-    #   normalize_articles · ARTICLE_TOKEN · NUMERIC · _kiwi() (사용자 사전) · KEEP_TAGS · expand_query_terms
-    # Kiwi 토큰은 .form(글자)과 .tag(품사)를 갖는다. 어떤 재료를 어떤 순서로 쓸지는 직접 정한다.
-    # 순서가 틀리면 어느 테스트가 빨개지는지가 힌트다. expand 는 질의에만 쓴다(문서 쪽은 확장하지 않는다).
-    raise NotImplementedError("TODO: tokenize 를 구현하세요")
+    if not text or not text.strip():
+        return []
+
+    raw = text
+    tokens: list[str] = []
+
+    # 1. 조항 표기를 "제15조의2" 하나로 모으고, 형태소 분석기에 넘기기 전에 먼저 떼어 낸다.
+    #    Kiwi 에 그대로 주면 제/15/조/의/2 로 쪼개 버린다.
+    text = normalize_articles(text)
+
+    def take_article(m: re.Match) -> str:
+        tokens.append(m.group(0).replace(" ", ""))
+        return " "
+    text = ARTICLE_TOKEN.sub(take_article, text)
+
+    # 2. 숫자·비율·금액은 원형을 남긴다. 조항을 먼저 뺐으니 조항의 15 가 여기 걸리지 않는다.
+    #    Kiwi 는 "1.4%" 를 1.4 / % 로 나누므로 역시 분석 전에 떼어 낸다.
+    def take_number(m: re.Match) -> str:
+        tokens.append(m.group(0))
+        return " "
+    text = NUMERIC.sub(take_number, text)
+
+    # 3. 나머지는 Kiwi 로 자르고 내용어 품사만 남긴다. 사용자 사전 낱말은 NNG 로 통째로 나온다.
+    #    태그는 "VA-I" 처럼 꼬리가 붙을 수 있어 앞부분만 본다.
+    for tok in _kiwi().tokenize(text):
+        if tok.tag.split("-")[0] in KEEP_TAGS:
+            tokens.append(tok.form)
+
+    # 4. 질의일 때만 별칭을 더한다. 별칭도 같은 규칙으로 잘라 넣는다("계약 전 알릴 의무"처럼 띄어쓴 것도 있다).
+    if expand:
+        for alias in expand_query_terms(raw):
+            tokens.extend(tokenize(alias))
+
+    return tokens
 
 
 def whitespace_tokenize(text: str) -> list[str]:

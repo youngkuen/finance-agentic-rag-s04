@@ -1,0 +1,32 @@
+{
+ "session": 4,
+ "generated_at": "2026-10-03T02:33:51+00:00",
+ "passed": 6,
+ "total": 6,
+ "checks": {
+  "hybrid.json 존재": {
+   "ok": true,
+   "detail": "40문항"
+  },
+  "조항번호형 MRR ≥ baseline": {
+   "ok": true,
+   "detail": "baseline 0.75 → hybrid 0.8333"
+  },
+  "전체 MRR ≥ baseline": {
+   "ok": true,
+   "detail": "0.5548 → 0.6932"
+  },
+  "전체 Recall@1 ≥ baseline": {
+   "ok": true,
+   "detail": "0.4 → 0.625"
+  },
+  "리랭커 지연 기록": {
+   "ok": true,
+   "detail": "평균 1311.4ms"
+  },
+  "ADR-003": {
+   "ok": true,
+   "detail": "5,019자"
+  }
+ }
+}
